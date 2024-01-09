@@ -3,6 +3,12 @@ const axios = require('axios');
 var {Bugil}=require('./bug')
 //console.log(Bugil)
 
+const { tmpdir } = require("os")
+const Crypto = require("crypto")
+const ff = require('fluent-ffmpeg')
+const webp = require("node-webpmux")
+const path = require("path")
+const formData = require('form-data')
 const Pino = require('pino');
 const FormData = require('form-data')
 const fs = require('fs');
@@ -371,7 +377,7 @@ ${listmenu}`,
 //const semuaFungsi = Object.getOwnPropertyNames(module.exports).filter(name => typeof module.exports[name] === 'function' || typeof module.exports[name] === 'AsyncFunction');
 //console.log(semuaFungsi)
 // Menambahkan
-//konek()
+konek()
 
 const express = require('express');
 const app = express();
@@ -387,4 +393,4 @@ app.get('/', (req, res) => {
     res.send({'play':stutu});
   }
 });
-app.listen()
+//app.listen()
