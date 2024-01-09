@@ -377,7 +377,7 @@ ${listmenu}`,
 //const semuaFungsi = Object.getOwnPropertyNames(module.exports).filter(name => typeof module.exports[name] === 'function' || typeof module.exports[name] === 'AsyncFunction');
 //console.log(semuaFungsi)
 // Menambahkan
-konek()
+//konek()
 
 const express = require('express');
 const app = express();
@@ -393,4 +393,4 @@ app.get('/', (req, res) => {
     res.send({'play':stutu});
   }
 });
-//app.listen()
+app.listen()
