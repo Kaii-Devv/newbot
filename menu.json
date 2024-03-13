@@ -42,9 +42,6 @@
       "s_function": "async function gass() {\n    const list = await soket.groupMetadata(wa_number);\n    const num = [];\n\n    if (list.participants) {\n        for (const lis of list.participants) {\n            if (lis.id) num.push(lis.id);\n        }\n    }\n\n    soket.sendMessage(wa_number, {\n        text: '*Penting!*\\nPesan dari @' + m.key.participant.split('@')[0] + ' : \\n' + u_comand,\n        mentions: num},\n        {quoted: fakeReplys}\n    );\n}",
       "s_command": "gass()",
       "function": "//none"
-    },
-    {
-      "name": ".doods"
     }
   ]
 }

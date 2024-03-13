@@ -36,15 +36,98 @@ let menu = dic.menu
 for (menuq of menu){
     comand.push(menuq.name)
 }
+
+let member = {}
+
+let dicm = JSON.parse(fs.readFileSync('member.json', 'utf8'))
+let lis = dicm.list
+for (l of lis){
+    member[l.number] = l.gpt
+}
+
+function addmember(num,sessi){
+    member[num] = sessi
+    dicm.list.push({"number":num,"gpt":sessi})
+    fs.writeFileSync('member.json', JSON.stringify(dicm, null, 2), 'utf-8');
+}
+
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 
+const generateString = () => {
+  const prefix = '01HRP';
+  const remainingLength = 21 - prefix.length;
+  const randomString = Array.from({ length: remainingLength }, () => Math.floor(Math.random() * 36).toString(36).toUpperCase()).join('');
+  return prefix + randomString;
+}
+
+async function getToken(v,email){
+    let app
+    if (v===1){
+        app = "com.lightricks.Enlight-Phoenix"
+    }else{app = "com.lightricks.Enlight-Video"}
+
+    const headers = {
+      'Host': 'api.fortress-ww-prd.lightricks.com',
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+      'Accept-Encoding': 'gzip',
+      'User-Agent': 'okhttp/4.10.0'
+    };
+    
+    const response = await axios.post('https://api.fortress-ww-prd.lightricks.com/v2/auth/otp?app=' + app + '&cvc=1412&plt=a&pltv=28&env=production', {
+      identityType: 'email',
+      identity: email
+    }, { headers: headers })
+    await sleep(2)
+    let limit = 0;
+    let kode
+    while (limit<10){
+        await sleep(1)
+        const inbox = await axios.get('https://www.1secmail.com/api/v1/?action=getMessages&login='+email.split("@")[0]+'&domain='+email.split("@")[1])
+        if (inbox!=undefined) {
+            try{
+                kode = inbox.data[0]["subject"].split(': ')[1];
+                const tokens = await axios.post('https://api.fortress-ww-prd.lightricks.com/v2/auth/email/login?app='+app+'&cvc=1412&plt=a&pltv=28&env=production',{"email":email,"identityProofType":"email","identityProof":kode},{headers:headers})
+                return tokens.data.token
+                break
+            }catch(w){}
+        }
+        limit + 1
+    }
+}
+// getToken(2,'irjrhrhhrjuev@1secmail.com')
+// .then(response=>{console.log(response)})
 
 
+const { v4: uuidv4 } = require('uuid');
 
+async function editImage(prompt, image, token, userid) {
+  const url = "https://cf.res.lightricks.com/v2/api/ai-gaming/predict-sync";
+  const headers = {
+    "x-request-id": uuidv4(),
+    "authorization": `Bearer ${token}`,
+    "x-lightricks-auth-token": token,
+    "x-app-id": "com.lightricks.videoleap",
+    "x-build-number": "1.25.1",
+    "x-platform": "android",
+    "x-lightricks-subscriber": "true",
+    "x-client-user-id": userid,
+    "accept-encoding": "gzip",
+    "user-agent": "okhttp/4.10.0"
+  };
 
+  
+
+  //const image = fs.readFileSync(pathToImage);
+  const files = new FormData();
+  files.append('input', image, 'image.jpg');
+  files.append('params', '{"prompt": "'+prompt+'"}')
+  const response = await axios.post(url, files, { headers: headers,responseType: 'arraybuffer'});
+  return response.data;
+}
 
 
 async function konek(){
@@ -213,12 +296,12 @@ async function konek(){
                 console.log(`${type} : ${mCaption}`)
                 fakeReplys=m
 
-                if (mCaption==='.toUrl'){
+                if (mCaption.split(' ')[0]==='.toUrl'){
                     //imageMessage(media)
                     const media = await downloadMediaMessage(m,'buffer');
                     const results = await uploadFileBuffer(media,name)
                     textMessage(results)
-                }else if (mCaption==='.sticker'){
+                } else if (mCaption.split(' ')[0]==='.sticker'){
                     const media = await downloadMediaMessage(m,'buffer');
                     if (type !='videoMessage'){
                         const webp = await ToStic(media, {author:'Tamsis X Code',packname:'SimpleBot'})
@@ -227,141 +310,95 @@ async function konek(){
                         const webp = await writeExifVid(media, {author:'Tamsis X Code',packname:'SimpleBot'})
                         stickerMessage(fs.readFileSync(webp))
                     }
+                } else if (mCaption.split(' ')[0]==='.editor'){
+                    const media = await downloadMediaMessage(m,'buffer');
+                    let prompt = mCaption.replace(mCaption.split(' ')[0]+' ','')
+                    
+                    if (type !='videoMessage'){
+                        const token = await getToken(1,wa_number.split('@')[0].toLowerCase()+'@1secmail.com')
+                        const result = await editImage(prompt,media,token,generateString())
+                        imageMessage(result)
+                    }else{
+                        const token = await getToken(1,wa_number.split('@')[0].toLowerCase()+'@1secmail.com')
+                        const form = new FormData();
+                        form.append('video', media, 'video.mp4');
+                        form.append('token', token);
+                        form.append('prompt', prompt);
+                        
+                        let result = (await axios.post('https://pyapi.cyclic.app/api/editor/vidio', form)).data
+                        console.log(result)
+                        let progres = 0
+                        while (progres<30){
+                            let chk = (await axios.get(result.progres)).data
+                            console.log(chk)
+                            if (chk['status-code'] === 'done'){
+                                let rs = chk['results'][0]
+                                await videoMessage({url:rs})
+                                progres = 31
+                            }else if (chk['status-code'] == 'in-progress'){
+                                await sleep(5)
+                                console.log(progres)
+                                //progres = progres 
+                                //await textMessage('progres : '+String(chk['progress'])+'%')
+                            }
+                           // progres = progres+1;
+                        }
+                    }
                 }
                 prompt = false
             } else if (typeof prompt != 'string'){
                 prompt = prompt.text
             }
 
-            if (typeof prompt === 'string'){
+            if (typeof prompt === 'string' && !m.eventResponses){
                 console.log(`textMessage : ${prompt}`)
                 if (prompt.split(' ')[0] === '.toUrl' || prompt.split(' ')[0] === '.sticker'){
                     textMessage('butuh video/gambar')
                 }
-                if (prompt.split(' ')[0] === '.jalantikus'){
-
-                    let u_comand = prompt.replace(prompt.split(' ')[0]+' ','');
-                    let vir = prompt.split(' ')[1]+'@s.whatsapp.net' || wa_number
-
-                    let jum = '2'
-                    if (u_comand.split('|')[1]!=undefined){
-                        vir = u_comand.split('|')[0]
-                        jum = u_comand.split('|')[2]
+                if (!member.hasOwnProperty(wa_number)){
+                    
+                    if (prompt == '/daftar'){
+                        
+                        const gpts = (await axios.get('https://pyapi.cyclic.app/api/gpt3?prompt=balas%20pesan%20ini%20dengan%20kata%20sambutan%20untuk%20user%20yang%20baru%20terdaftar%20di%20layanan')).data;
+                        textMessage(gpts.response)
+                        addmember(wa_number,gpts.session)
                     }else{
-                        vir = wa_number;
-                        jum= u_comand
+                        pesan_belum_terdaftar = [
+                            "Maaf, Anda belum terdaftar. Untuk mendaftar, ketik /daftar.",
+                            "Oh tidak! Anda belum mendaftar. Silakan ketik /daftar untuk mulai.",
+                            "Sepertinya Anda belum terdaftar. Anda dapat mendaftar dengan mengetik /daftar.",
+                            "Mohon maaf, akses ke bot hanya tersedia bagi yang terdaftar. Silakan daftar dengan mengetik /daftar.",
+                            "Anda belum mendaftar ke layanan bot. Segera daftar dengan mengetik /daftar.",
+                            "Untuk mengakses bot, Anda perlu mendaftar terlebih dahulu. Silakan ketik /daftar untuk memulai proses pendaftaran.",
+                            "Maaf, Anda belum terdaftar. Silakan lakukan pendaftaran dengan mengetik /daftar.",
+                            "Anda belum mendaftar. Silakan lakukan pendaftaran sekarang dengan mengetik /daftar.",
+                            "Sayang sekali, Anda belum terdaftar. Silakan daftar sekarang dengan mengetik /daftar.",
+                            "Anda belum terdaftar ke layanan bot. Mohon daftar dengan mengetik /daftar.",
+                            "Mohon maaf, Anda belum mendaftar. Lakukan pendaftaran dengan mengetik /daftar.",
+                            "Maaf, Anda belum terdaftar. Silakan daftar sekarang dengan mengetik /daftar.",
+                            "Tampaknya Anda belum terdaftar. Mohon daftar terlebih dahulu dengan mengetik /daftar.",
+                            "Oh tidak! Anda belum terdaftar. Untuk mulai, ketik /daftar.",
+                            "Anda belum mendaftar ke layanan bot. Silakan lakukan pendaftaran dengan mengetik /daftar.",
+                            "Maaf, Anda belum terdaftar. Mohon daftar sekarang dengan mengetik /daftar.",
+                            "Anda belum mendaftar. Untuk mengakses bot, lakukan pendaftaran dengan mengetik /daftar.",
+                            "Sayangnya, Anda belum terdaftar. Silakan daftar sekarang dengan mengetik /daftar.",
+                            "Anda belum terdaftar ke layanan bot. Silakan lakukan pendaftaran dengan mengetik /daftar.",
+                            "Mohon maaf, Anda belum terdaftar. Untuk mendaftar, ketik /daftar."
+                        ];
+                        textMessage(pesan_belum_terdaftar[Math.floor(Math.random() * pesan_belum_terdaftar.length)])
+                        
                     }
 
-                    for (let x = 0;x<parseInt(jum);x++){
-                    await sleep(2000)
-                    var scheduledCallCreationMessage = await generateWAMessageFromContent(vir, proto.Message.fromObject({
-"scheduledCallCreationMessage": {
-"callType": "2",
-"scheduledTimestampMs": `${moment(1000).tz("Asia/Kolkata").format("DD/MM/YYYY HH:mm:ss")}`,
-"title": Bugil+Bugil+Bugil+Bugil,
-}
-}), { userJid: vir, quoted : fakeReplys});
-
-                    //console.log(scheduledCallCreationMessage);
-                    const x = await soket.relayMessage(vir, scheduledCallCreationMessage.message, { messageId: scheduledCallCreationMessage.key.id });
-                    //console.log(scheduledCallCreationMessage)
-                    textMessage('succes kirim bug emoji by jalantikus.com ke nomer '+prompt.split(' ')[1]+'@s.whatsapp.net' || wa_number)}
+                }else if (prompt && member.hasOwnProperty(wa_number)){
+                    let pesan = (await axios.get('https://pyapi.cyclic.app/api/gpt3', {
+                      params: {
+                        prompt: prompt.replace(' ','%20'),
+                        session: member[wa_number]
+                      }
+                    })).data
+                    textMessage(pesan.response)
                 }
-                if (prompt.split(' ')[0] === '>'){
-                    try{
-                      let u_comand = prompt.replace(prompt.split(' ')[0]+' ','');
-                      eval(u_comand)
-                    }catch(eerr){
-                      textMessage(String(eerr))
-                    }
-                }
-                if (prompt.split(' ')[0] === '.menu' && ((m.key.participant || m.key.remoteJid ) === '6281563375928@s.whatsapp.net' || (m.key.participant || m.key.remoteJid ) === '6283115331009@s.whatsapp.net')){
-                    const listmenu = comand.map(item => '🚩 ' + item).join('\n');
-                    soket.sendMessage(wa_number,{
-                        //canonicalUrl:"https://github.com/kaii-devv",
-                        text: `
-Hai *@${userg.split('@')[0]}* Ganteng
-Wellcome in SimpleBot by *@Tamsis X Code*
-Follow sosmed ku gan :
-> https://github.com/kaii-devv
-> https://www.facebook.com/100066790856758
-
-🚩 .addfitur 
-🚩 .dellfitur
-
-🚩 .menu
-🚩 .jalantikus
-🚩 .toUrl
-🚩 .sticker
-${listmenu}`,
-                        //mentions:[wa_number],
-                        contextInfo:{
-                            mentionedJid: [userg],
-                            externalAdReply:{
-                                title:'SimpleBot',
-                                body: 'Tamsis X Code',
-                                //canonicalUrl: 'https://www.facebook.com/',
-                                thumbnail: logo,
-                                sourceUrl:'https://github.com/kaii-devv',
-                                sourceType:"PHOTO",
-                                previewType:0,
-//                                showAdAttribution: true
-                            }
-                        },
-                    },{
-                        quoted:fakeReplys
-                    }
-                    )
-                }else if (comand.includes(prompt.split(' ')[0])){
-                    let u_comand = prompt.replace(prompt.split(' ')[0]+' ','');
-                    if (u_comand.split('.')[0] === 'get'){
-                        if (u_comand.split('.')[1]==='info' || ((m.key.participant || m.key.remoteJid ) === '6281563375928@s.whatsapp.net' || (m.key.participant || m.key.remoteJid ) === '6283115331009@s.whatsapp.net')){
-                            try{
-                              textMessage(String(menu[comand.indexOf(prompt.split(' ')[0])][u_comand.split('.')[1]]))
-                            }catch(err) {textMessage(String(err))}
-                        }
-                    }else if (['info','name','s_command','function','s_function'].includes(u_comand.split('=#=')[0])){
-                        dic['menu'][comand.indexOf(prompt.split(' ')[0])][u_comand.split('=#=')[0]] = u_comand.split('=#=')[1]
-                        fs.writeFileSync('menu.json', JSON.stringify(dic, null, 2), 'utf-8');
-                    }else if (Object.keys(menu[comand.indexOf(prompt.split(' ')[0])]).length > 3){
-                        if(u_comand != undefined && u_comand!='' && u_comand!=' '){
-                            try{
-                                eval(menu[comand.indexOf(prompt.split(' ')[0])]['function']);
-                                eval(menu[comand.indexOf(prompt.split(' ')[0])]['s_function']);
-                                eval(menu[comand.indexOf(prompt.split(' ')[0])]['s_command'])}catch (err){textMessage(String(err))}
-                            }
-                    }else{
-                        console.log(Object.keys(menu[comand.indexOf(prompt.split(' ')[0])]).length)
-                        const sisa = ['name','s_command','function','s_function'].filter(item => !Object.keys(menu[comand.indexOf(prompt.split(' ')[0])]).includes(item));
-                        soket.sendMessage(wa_number,{text:'fitur ini belum lengkap\nmasih butuh : '+sisa.join(', ')},{quoted:fakeReplys})
-                    }
-                }else if (prompt.split(' ')[0]==='.addfitur'){
-                    if (!comand.includes(prompt.split(' ')[1])){
-                        dic.menu.push({'name':prompt.split(' ')[1]})
-                        fs.writeFileSync('menu.json', JSON.stringify(dic, null, 2), 'utf-8');
-                        comand = [];
-                        dic = JSON.parse(fs.readFileSync('menu.json', 'utf8'));
-                        menu = dic.menu
-                        for (menuq of menu){
-                            comand.push(menuq.name)}
-                        textMessage(`berhasil add fitur ${prompt.split(' ')[1]} ke dalam bot`)
-                    }else{
-                        textMessage(`fitur ${prompt.split(' ')[1]} sudah ada sebelum kamu add`)}
-                }else if (prompt.split(' ')[0]==='.dellfitur'  && ((m.key.participant || m.key.remoteJid ) === '6281563375928@s.whatsapp.net' || (m.key.participant || m.key.remoteJid ) === '6283115331009@s.whatsapp.net') ){
-                    const object = prompt.split(' ')[1];
-                    const index = comand.indexOf(object)
-                    if (index!=-1){
-                        dic.menu.splice(index,1)
-                        fs.writeFileSync('menu.json', JSON.stringify(dic, null, 2), 'utf-8');
-                        comand = [];
-                        dic = JSON.parse(fs.readFileSync('menu.json', 'utf8'));
-                        menu = dic.menu
-                        for (menuq of menu){
-                            comand.push(menuq.name)}
-
-                        textMessage(`berhasil delete fitur ${object} dari bot`)
-                    }
-                };
+            
               soket.chatModify({
                   delete: true,
                   lastMessages: [{ key: m.key, messageTimestamp: m.messageTimestamp }]
@@ -377,7 +414,7 @@ ${listmenu}`,
 //const semuaFungsi = Object.getOwnPropertyNames(module.exports).filter(name => typeof module.exports[name] === 'function' || typeof module.exports[name] === 'AsyncFunction');
 //console.log(semuaFungsi)
 // Menambahkan
-//konek()
+// konek()
 
 const express = require('express');
 const app = express();
